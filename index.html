@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ママの占い部屋</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{overflow:hidden;background:#0a0510;font-family:'Hiragino Kaku Gothic ProN','Yu Gothic','Meiryo',sans-serif;color:#e8d5f5;touch-action:none}
+  canvas{display:block}
+
+  /* Loading screen */
+  #loading{position:fixed;inset:0;background:radial-gradient(ellipse at center,#1a0a2e 0%,#0a0510 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000;transition:opacity 1.2s ease}
+  #loading.hidden{opacity:0;pointer-events:none}
+  #loading h1{font-size:2.4rem;margin-bottom:1rem;background:linear-gradient(135deg,#c084fc,#f0abfc,#e879f9);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;animation:pulse-title 2s ease-in-out infinite}
+  #loading .orb{width:60px;height:60px;border-radius:50%;background:radial-gradient(circle,#c084fc 0%,#7c3aed 40%,transparent 70%);animation:orb-pulse 1.5s ease-in-out infinite;margin-bottom:1.5rem}
+  #loading p{font-size:1rem;color:#a78bfa;animation:dots 1.5s steps(3) infinite}
+  @keyframes pulse-title{0%,100%{opacity:.7}50%{opacity:1}}
+  @keyframes orb-pulse{0%,100%{transform:scale(1);box-shadow:0 0 30px #c084fc}50%{transform:scale(1.2);box-shadow:0 0 60px #e879f9}}
+  @keyframes dots{0%{content:''}33%{content:'.'}66%{content:'..'}100%{content:'...'}}
+
+  /* HUD */
+  #hud{position:fixed;top:0;left:0;right:0;padding:16px 20px;display:flex;justify-content:space-between;align-items:flex-start;z-index:10;pointer-events:none}
+  #title-area{pointer-events:auto}
+  #title-area h1{font-size:1.5rem;background:linear-gradient(135deg,#c084fc,#f0abfc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-shadow:none;letter-spacing:0.05em}
+  #title-area p{font-size:0.75rem;color:#a78bfa80;margin-top:2px}
+
+  /* Category selector */
+  #categories{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:10;flex-wrap:wrap;justify-content:center}
+  #categories button{background:rgba(124,58,237,0.25);border:1px solid rgba(192,132,252,0.3);color:#e8d5f5;padding:8px 16px;border-radius:20px;font-size:0.85rem;cursor:pointer;transition:all 0.3s;backdrop-filter:blur(10px);font-family:inherit}
+  #categories button:hover,#categories button.active{background:rgba(192,132,252,0.4);border-color:#c084fc;box-shadow:0 0 15px rgba(192,132,252,0.3)}
+
+  /* Hint */
+  #hint{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);color:#a78bfa80;font-size:0.8rem;z-index:10;animation:hint-fade 3s ease-in-out infinite;text-align:center;pointer-events:none;white-space:nowrap}
+  @keyframes hint-fade{0%,100%{opacity:0.4}50%{opacity:1}}
+
+  /* Fortune overlay */
+  #fortune-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity 0.6s ease;background:rgba(10,5,16,0.6);backdrop-filter:blur(4px)}
+  #fortune-overlay.visible{opacity:1;pointer-events:auto}
+
+  #fortune-card{max-width:380px;width:90%;padding:3px;border-radius:20px;background:linear-gradient(135deg,#7c3aed,#c084fc,#f0abfc,#7c3aed);background-size:300% 300%;animation:gradient-shift 4s ease infinite;box-shadow:0 0 60px rgba(192,132,252,0.4),0 0 120px rgba(124,58,237,0.2)}
+  @keyframes gradient-shift{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+
+  #fortune-inner{background:linear-gradient(135deg,#1a0a2e,#0f0520);border-radius:18px;padding:30px 24px;text-align:center}
+  #fortune-inner .category-label{font-size:0.8rem;color:#a78bfa;text-transform:uppercase;letter-spacing:0.15em;margin-bottom:8px}
+  #fortune-inner .luck-level{font-size:2.8rem;margin:8px 0;background:linear-gradient(135deg,#fbbf24,#f59e0b,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  #fortune-inner .luck-level.bad{background:linear-gradient(135deg,#818cf8,#6366f1,#818cf8);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  #fortune-inner .message{font-size:1rem;line-height:1.8;color:#d8c5ee;margin:16px 0 24px}
+  #fortune-inner .stars{font-size:1.2rem;margin-bottom:16px;letter-spacing:4px}
+
+  #retry-btn{background:linear-gradient(135deg,#7c3aed,#a855f7);border:none;color:#fff;padding:12px 32px;border-radius:30px;font-size:1rem;cursor:pointer;transition:all 0.3s;font-family:inherit}
+  #retry-btn:hover{transform:scale(1.05);box-shadow:0 0 20px rgba(168,85,247,0.5)}
+
+  /* Tarot overlay */
+  #tarot-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity 0.6s ease;background:rgba(10,5,16,0.6);backdrop-filter:blur(4px)}
+  #tarot-overlay.visible{opacity:1;pointer-events:auto}
+  #tarot-card-display{max-width:360px;width:90%;padding:3px;border-radius:20px;background:linear-gradient(135deg,#6366f1,#8b5cf6,#a78bfa,#6366f1);background-size:300% 300%;animation:gradient-shift 4s ease infinite;box-shadow:0 0 60px rgba(139,92,246,0.4)}
+  #tarot-inner{background:linear-gradient(135deg,#1a0a2e,#0f0520);border-radius:18px;padding:30px 24px;text-align:center}
+  #tarot-inner .card-name{font-size:1.8rem;margin:8px 0;background:linear-gradient(135deg,#c084fc,#e879f9);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  #tarot-inner .card-meaning{font-size:0.95rem;line-height:1.8;color:#d8c5ee;margin:16px 0 24px}
+  #tarot-close-btn{background:linear-gradient(135deg,#6366f1,#8b5cf6);border:none;color:#fff;padding:10px 28px;border-radius:30px;font-size:0.95rem;cursor:pointer;transition:all 0.3s;font-family:inherit}
+  #tarot-close-btn:hover{transform:scale(1.05);box-shadow:0 0 20px rgba(139,92,246,0.5)}
+
+  /* Shimmer effect */
+  #shimmer{position:fixed;inset:0;z-index:99;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(192,132,252,0.15) 0%,transparent 70%);transition:opacity 0.3s}
+  #shimmer.active{opacity:1;animation:shimmer-anim 0.8s ease-out forwards}
+  @keyframes shimmer-anim{0%{opacity:0;transform:scale(0.8)}30%{opacity:1}100%{opacity:0;transform:scale(1.3)}}
+
+  @media(max-width:600px){
+    #title-area h1{font-size:1.1rem}
+    #categories button{padding:6px 12px;font-size:0.75rem}
+    #fortune-inner .luck-level{font-size:2.2rem}
+    #hint{font-size:0.7rem;bottom:60px}
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loading">
+  <div class="orb"></div>
+  <h1>ママの占い部屋</h1>
+  <p>読み込み中...</p>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="title-area">
+    <h1>ママの占い部屋 &#x1F52E;</h1>
+    <p>クリスタルボールをクリックして占おう</p>
+  </div>
+</div>
+
+<div id="hint">&#x1F52E; 水晶玉をクリック &middot; &#x1F0CF; タロットカードをクリック</div>
+
+<!-- Category selector -->
+<div id="categories">
+  <button class="active" data-cat="総合運">&#x2728; 総合運</button>
+  <button data-cat="恋愛運">&#x1F497; 恋愛運</button>
+  <button data-cat="仕事運">&#x1F4BC; 仕事運</button>
+  <button data-cat="金運">&#x1F4B0; 金運</button>
+  <button data-cat="健康運">&#x1F33F; 健康運</button>
+</div>
+
+<!-- Fortune overlay -->
+<div id="fortune-overlay">
+  <div id="fortune-card">
+    <div id="fortune-inner">
+      <div class="category-label" id="f-category"></div>
+      <div class="stars" id="f-stars"></div>
+      <div class="luck-level" id="f-luck"></div>
+      <div class="message" id="f-message"></div>
+      <button id="retry-btn">もう一度占う</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tarot overlay -->
+<div id="tarot-overlay">
+  <div id="tarot-card-display">
+    <div id="tarot-inner">
+      <div class="category-label">TAROT READING</div>
+      <div class="card-name" id="t-name"></div>
+      <div class="card-meaning" id="t-meaning"></div>
+      <button id="tarot-close-btn">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shimmer -->
+<div id="shimmer"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.163.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.163.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// ============================================================
+// FORTUNE DATA
+// ============================================================
+const fortunes = {
+  "恋愛運": [
+    { level: "大吉", msg: "運命の出会いが間もなく訪れます。心を開いて待ちましょう。" },
+    { level: "大吉", msg: "あなたの優しさが誰かの心を深く動かします。素直に愛を伝えて。" },
+    { level: "吉",   msg: "思いやりの気持ちが恋を育てます。小さな気遣いを大切に。" },
+    { level: "吉",   msg: "懐かしい人との再会が新しい恋の始まりになるかもしれません。" },
+    { level: "中吉", msg: "少し勇気を出して自分から声をかけてみましょう。良い返事が来るはず。" },
+    { level: "中吉", msg: "今は焦らず、ゆっくり信頼を築く時期です。" },
+    { level: "小吉", msg: "自分磨きの時期。内面を高めることで良縁に恵まれます。" },
+    { level: "凶",   msg: "すれ違いが多い時期。言葉にして気持ちを伝えることが大切です。" },
+  ],
+  "仕事運": [
+    { level: "大吉", msg: "大きなチャンスが舞い込みます。迷わず飛び込みましょう！" },
+    { level: "大吉", msg: "あなたの努力が認められ、評価が大きく上がる時です。" },
+    { level: "吉",   msg: "チームワークが成功の鍵。周囲との協力を大切にしましょう。" },
+    { level: "吉",   msg: "新しいスキルを学ぶと、思わぬ道が開けるでしょう。" },
+    { level: "中吉", msg: "コツコツ積み重ねた成果がそろそろ実を結びます。" },
+    { level: "中吉", msg: "転機の兆し。変化を恐れずに受け入れましょう。" },
+    { level: "小吉", msg: "準備期間と割り切って。今の積み重ねが将来の大きな実りに。" },
+    { level: "凶",   msg: "焦りは禁物。一歩引いて全体を見渡す余裕を持ちましょう。" },
+  ],
+  "金運": [
+    { level: "大吉", msg: "思いがけない臨時収入の暗示。感謝を忘れずに使いましょう。" },
+    { level: "大吉", msg: "投資や貯蓄が大きく実る時。お金の流れが良い方向へ。" },
+    { level: "吉",   msg: "無駄遣いを控えれば、安定した金運が続きます。" },
+    { level: "吉",   msg: "人に与えることで金運が巡ってきます。小さな寄付も吉。" },
+    { level: "中吉", msg: "節約を心がければ、年末に嬉しい報告が。" },
+    { level: "中吉", msg: "副業や新しい収入源を検討すると良い時期です。" },
+    { level: "小吉", msg: "衝動買いに注意。本当に必要なものを見極めましょう。" },
+    { level: "凶",   msg: "出費がかさむ時期。予算管理を徹底して乗り切りましょう。" },
+  ],
+  "健康運": [
+    { level: "大吉", msg: "心身ともに絶好調！新しい運動やアクティビティにチャレンジ。" },
+    { level: "大吉", msg: "エネルギーに満ち溢れた時期。何をしても活力が湧いてきます。" },
+    { level: "吉",   msg: "規則正しい生活が幸運を呼びます。早寝早起きを心がけて。" },
+    { level: "吉",   msg: "温かい食べ物や飲み物が体を癒してくれるでしょう。" },
+    { level: "中吉", msg: "軽い散歩や瞑想がリフレッシュの鍵。自然に触れましょう。" },
+    { level: "中吉", msg: "水分補給とストレッチで体調が整います。" },
+    { level: "小吉", msg: "無理をしないこと。休息も大切な健康法です。" },
+    { level: "凶",   msg: "疲れが溜まっている暗示。しっかり休んで体を労わりましょう。" },
+  ],
+  "総合運": [
+    { level: "大吉", msg: "全てが好調な大吉日！何を始めても上手くいく素晴らしい運気です。" },
+    { level: "大吉", msg: "あなたの星が最も輝く時。直感を信じて行動しましょう。" },
+    { level: "吉",   msg: "穏やかで幸せな日々が続きます。感謝の気持ちを忘れずに。" },
+    { level: "吉",   msg: "笑顔が幸運を引き寄せます。明るく過ごしましょう。" },
+    { level: "中吉", msg: "小さな幸せを見つけられる時。日常の中に宝物があります。" },
+    { level: "中吉", msg: "バランスの良い時期。何事もほどほどが一番です。" },
+    { level: "小吉", msg: "慎重に行動すれば良い方向へ。焦らず着実に進みましょう。" },
+    { level: "凶",   msg: "試練の時ですが、乗り越えた先に大きな成長が待っています。" },
+  ]
+};
+
+const tarotCards = [
+  { name: "愚者 (The Fool)",       meaning: "新たな旅立ちの時。既成概念にとらわれず、自由な心で一歩を踏み出しましょう。無限の可能性があなたを待っています。" },
+  { name: "魔術師 (The Magician)",  meaning: "あなたには全てを実現する力があります。才能と意志の力を信じて、創造のエネルギーを解き放ちましょう。" },
+  { name: "女教皇 (High Priestess)", meaning: "直感と内なる声に耳を傾けて。静寂の中にこそ真実が隠されています。深い知恵があなたを導くでしょう。" },
+  { name: "女帝 (The Empress)",     meaning: "豊かさと愛に包まれる時。創造性が開花し、美しいものがあなたの周りに集まってきます。" },
+  { name: "皇帝 (The Emperor)",     meaning: "リーダーシップを発揮する時。確固たる意志と責任感で、道を切り開いていきましょう。" },
+  { name: "恋人 (The Lovers)",      meaning: "大切な選択の時。心の声に従えば、愛と調和に満ちた結果が訪れるでしょう。" },
+  { name: "戦車 (The Chariot)",     meaning: "勝利の暗示。困難を乗り越える強い意志が、あなたを目標へと導きます。前進あるのみ！" },
+  { name: "星 (The Star)",          meaning: "希望の光が差し込みます。困難の後に訪れる癒しと再生。未来は明るく輝いています。" },
+  { name: "月 (The Moon)",          meaning: "不安や迷いの時ですが、それは成長の過程。霧が晴れれば、新しい世界が見えてきます。" },
+  { name: "太陽 (The Sun)",         meaning: "最高の幸運！喜びと成功に満ちた時期。あなたの輝きが周囲をも明るく照らします。" },
+  { name: "運命の輪 (Wheel of Fortune)", meaning: "運命が大きく動き始めます。変化の波に乗れば、想像以上の展開が待っているでしょう。" },
+  { name: "世界 (The World)",       meaning: "物事の完成と達成。一つのサイクルが終わり、新しいステージへの扉が開かれます。" },
+];
+
+// ============================================================
+// STATE
+// ============================================================
+let selectedCategory = "総合運";
+let isFortuneActive = false;
+let crystalBallObj = null;
+let tarotObjs = [];
+let candleLights = [];
+let incenseParticles = null;
+let crystalGlowLight = null;
+let scene, camera, renderer, controls, clock;
+let raycaster, mouse;
+let clickableObjects = [];
+let introAnimDone = false;
+let mixer = null;
+
+// ============================================================
+// DOM refs
+// ============================================================
+const loadingEl = document.getElementById('loading');
+const fortuneOverlay = document.getElementById('fortune-overlay');
+const tarotOverlay = document.getElementById('tarot-overlay');
+const shimmerEl = document.getElementById('shimmer');
+const catButtons = document.querySelectorAll('#categories button');
+
+catButtons.forEach(btn => {
+  btn.addEventListener('click', () => {
+    catButtons.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedCategory = btn.dataset.cat;
+  });
+});
+
+document.getElementById('retry-btn').addEventListener('click', () => {
+  fortuneOverlay.classList.remove('visible');
+  isFortuneActive = false;
+});
+
+document.getElementById('tarot-close-btn').addEventListener('click', () => {
+  tarotOverlay.classList.remove('visible');
+  isFortuneActive = false;
+});
+
+// ============================================================
+// INIT THREE.JS
+// ============================================================
+function init() {
+  clock = new THREE.Clock();
+  raycaster = new THREE.Raycaster();
+  mouse = new THREE.Vector2();
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0a0510);
+  scene.fog = new THREE.FogExp2(0x0a0510, 0.04);
+
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 4, 8);
+
+  renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    preserveDrawingBuffer: true,
+    alpha: false
+  });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 0.8;
+  document.body.appendChild(renderer.domElement);
+
+  // Controls
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 1.2, 0);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.maxPolarAngle = Math.PI * 0.75;
+  controls.minPolarAngle = Math.PI * 0.15;
+  controls.minDistance = 2;
+  controls.maxDistance = 10;
+  controls.enablePan = false;
+  controls.enabled = false; // disabled during intro
+
+  // Lights
+  const ambient = new THREE.AmbientLight(0x2d1b69, 0.4);
+  scene.add(ambient);
+
+  // Main overhead light (dim)
+  const overhead = new THREE.PointLight(0x6d28d9, 0.5, 15);
+  overhead.position.set(0, 4, 0);
+  scene.add(overhead);
+
+  // Crystal ball glow
+  crystalGlowLight = new THREE.PointLight(0xc084fc, 0.8, 5);
+  crystalGlowLight.position.set(0, 1.5, 0);
+  scene.add(crystalGlowLight);
+
+  // Candle lights
+  const candlePositions = [
+    new THREE.Vector3(-1.2, 1.6, -0.5),
+    new THREE.Vector3(1.2, 1.6, -0.5),
+    new THREE.Vector3(-0.8, 1.6, 0.6),
+    new THREE.Vector3(0.8, 1.6, 0.6),
+  ];
+  candlePositions.forEach((pos, i) => {
+    const light = new THREE.PointLight(0xffa040, 0.6, 4);
+    light.position.copy(pos);
+    light.castShadow = true;
+    light.shadow.mapSize.set(256, 256);
+    scene.add(light);
+    candleLights.push({ light, baseIntensity: 0.6, offset: i * 1.7 });
+  });
+
+  // Moon decoration light
+  const moonLight = new THREE.PointLight(0x93c5fd, 0.3, 6);
+  moonLight.position.set(0, 3.5, -3);
+  scene.add(moonLight);
+
+  // Incense smoke particles
+  createIncenseParticles();
+
+  // Load GLB
+  loadScene();
+
+  // Events
+  window.addEventListener('resize', onResize);
+  renderer.domElement.addEventListener('pointerdown', onPointerDown);
+
+  animate();
+}
+
+// ============================================================
+// INCENSE PARTICLES
+// ============================================================
+function createIncenseParticles() {
+  const count = 80;
+  const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(count * 3);
+  const velocities = new Float32Array(count * 3);
+  const lifetimes = new Float32Array(count);
+  const sizes = new Float32Array(count);
+
+  for (let i = 0; i < count; i++) {
+    resetParticle(i, positions, velocities, lifetimes, sizes);
+  }
+
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+  const material = new THREE.PointsMaterial({
+    color: 0xb8a9d4,
+    size: 0.06,
+    transparent: true,
+    opacity: 0.35,
+    blending: THREE.AdditiveBlending,
+    sizeAttenuation: true,
+    depthWrite: false,
+  });
+
+  incenseParticles = new THREE.Points(geometry, material);
+  incenseParticles._velocities = velocities;
+  incenseParticles._lifetimes = lifetimes;
+  incenseParticles._sizes = sizes;
+  incenseParticles._count = count;
+  scene.add(incenseParticles);
+}
+
+function resetParticle(i, positions, velocities, lifetimes, sizes) {
+  // incense position: somewhere near where incense holder would be
+  const baseX = 1.5, baseY = 1.3, baseZ = 0.8;
+  positions[i * 3] = baseX + (Math.random() - 0.5) * 0.1;
+  positions[i * 3 + 1] = baseY + Math.random() * 0.1;
+  positions[i * 3 + 2] = baseZ + (Math.random() - 0.5) * 0.1;
+
+  velocities[i * 3] = (Math.random() - 0.5) * 0.003;
+  velocities[i * 3 + 1] = 0.003 + Math.random() * 0.005;
+  velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.003;
+
+  lifetimes[i] = Math.random();
+  sizes[i] = 0.03 + Math.random() * 0.06;
+}
+
+function updateIncenseParticles(dt) {
+  if (!incenseParticles) return;
+  const pos = incenseParticles.geometry.attributes.position.array;
+  const vel = incenseParticles._velocities;
+  const life = incenseParticles._lifetimes;
+  const sizes = incenseParticles._sizes;
+  const count = incenseParticles._count;
+
+  for (let i = 0; i < count; i++) {
+    life[i] += dt * 0.15;
+    if (life[i] > 1) {
+      resetParticle(i, pos, vel, life, sizes);
+    }
+    pos[i * 3] += vel[i * 3] + Math.sin(life[i] * 5 + i) * 0.0005;
+    pos[i * 3 + 1] += vel[i * 3 + 1];
+    pos[i * 3 + 2] += vel[i * 3 + 2] + Math.cos(life[i] * 4 + i) * 0.0005;
+  }
+  incenseParticles.geometry.attributes.position.needsUpdate = true;
+}
+
+// ============================================================
+// LOAD SCENE
+// ============================================================
+function loadScene() {
+  const loader = new GLTFLoader();
+  loader.load(
+    'scene.glb',
+    (gltf) => {
+      const model = gltf.scene;
+      scene.add(model);
+
+      // Process objects
+      model.traverse((child) => {
+        if (!child.isMesh) return;
+
+        child.castShadow = true;
+        child.receiveShadow = true;
+        const name = child.name.toLowerCase();
+
+        // Crystal ball
+        if (name.includes('crystalball') || name.includes('crystal_ball') || name.includes('crystalball')) {
+          crystalBallObj = child;
+          child.material = child.material.clone();
+          child.material.transparent = true;
+          child.material.opacity = 0.6;
+          child.material.emissive = new THREE.Color(0x7c3aed);
+          child.material.emissiveIntensity = 0.3;
+          child.material.roughness = 0.05;
+          child.material.metalness = 0.1;
+          clickableObjects.push(child);
+        }
+
+        // Tarot cards
+        if (name.includes('tarot') || name.includes('card')) {
+          tarotObjs.push(child);
+          clickableObjects.push(child);
+        }
+
+        // Candle flames - make emissive
+        if (name.includes('flame') || name.includes('fire')) {
+          child.material = child.material.clone();
+          child.material.emissive = new THREE.Color(0xff8c00);
+          child.material.emissiveIntensity = 2;
+        }
+
+        // Stars and moon decor - emissive
+        if (name.includes('star') || name.includes('moon')) {
+          child.material = child.material.clone();
+          child.material.emissive = new THREE.Color(0x93c5fd);
+          child.material.emissiveIntensity = 0.5;
+        }
+
+        // Curtains
+        if (name.includes('curtain')) {
+          child.material = child.material.clone();
+          child.material.side = THREE.DoubleSide;
+        }
+      });
+
+      // If crystal ball not found by name, find the most sphere-like transparent-ish object near center
+      if (!crystalBallObj) {
+        let bestCandidate = null;
+        let bestScore = -Infinity;
+        model.traverse((child) => {
+          if (!child.isMesh) return;
+          const geo = child.geometry;
+          if (!geo || !geo.boundingSphere) geo.computeBoundingSphere();
+          if (!geo.boundingSphere) return;
+          const r = geo.boundingSphere.radius;
+          const worldPos = new THREE.Vector3();
+          child.getWorldPosition(worldPos);
+          const distFromCenter = worldPos.distanceTo(new THREE.Vector3(0, 1.2, 0));
+          // score: prefer spherical objects near center-ish, moderate size
+          if (r > 0.1 && r < 1 && distFromCenter < 3) {
+            const score = -distFromCenter + r * 2;
+            if (score > bestScore) {
+              bestScore = score;
+              bestCandidate = child;
+            }
+          }
+        });
+        if (bestCandidate && !crystalBallObj) {
+          crystalBallObj = bestCandidate;
+          crystalBallObj.material = crystalBallObj.material.clone();
+          crystalBallObj.material.transparent = true;
+          crystalBallObj.material.opacity = 0.6;
+          crystalBallObj.material.emissive = new THREE.Color(0x7c3aed);
+          crystalBallObj.material.emissiveIntensity = 0.3;
+          if (!clickableObjects.includes(crystalBallObj)) clickableObjects.push(crystalBallObj);
+        }
+      }
+
+      // Update controls target to crystal ball if found
+      if (crystalBallObj) {
+        const worldPos = new THREE.Vector3();
+        crystalBallObj.getWorldPosition(worldPos);
+        controls.target.copy(worldPos);
+        crystalGlowLight.position.copy(worldPos).y += 0.2;
+      }
+
+      // If we found no tarot cards by name, try to find card-like flat objects on the table
+      if (tarotObjs.length === 0) {
+        model.traverse((child) => {
+          if (!child.isMesh) return;
+          const geo = child.geometry;
+          if (!geo.boundingBox) geo.computeBoundingBox();
+          if (!geo.boundingBox) return;
+          const size = new THREE.Vector3();
+          geo.boundingBox.getSize(size);
+          // Cards are flat rectangular objects
+          const dims = [size.x, size.y, size.z].sort((a, b) => a - b);
+          if (dims[0] < 0.05 && dims[1] > 0.05 && dims[2] > 0.08) {
+            const worldPos = new THREE.Vector3();
+            child.getWorldPosition(worldPos);
+            if (worldPos.y > 0.5 && worldPos.y < 2.5) {
+              tarotObjs.push(child);
+              if (!clickableObjects.includes(child)) clickableObjects.push(child);
+            }
+          }
+        });
+      }
+
+      // Start intro animation
+      startIntroAnimation();
+
+      // Hide loading
+      setTimeout(() => {
+        loadingEl.classList.add('hidden');
+        setTimeout(() => loadingEl.style.display = 'none', 1200);
+      }, 500);
+    },
+    (progress) => {
+      // loading progress
+    },
+    (error) => {
+      console.error('Error loading GLB:', error);
+      // Still hide loading and show scene (empty but functional)
+      loadingEl.classList.add('hidden');
+      setTimeout(() => loadingEl.style.display = 'none', 1200);
+      controls.enabled = true;
+      introAnimDone = true;
+    }
+  );
+}
+
+// ============================================================
+// INTRO ANIMATION
+// ============================================================
+function startIntroAnimation() {
+  const startPos = { x: 0, y: 6, z: 12 };
+  const endPos = { x: 1.5, y: 2.5, z: 4 };
+  const duration = 3.0;
+  let elapsed = 0;
+
+  camera.position.set(startPos.x, startPos.y, startPos.z);
+
+  function introTick(dt) {
+    elapsed += dt;
+    const t = Math.min(elapsed / duration, 1);
+    // Ease out cubic
+    const ease = 1 - Math.pow(1 - t, 3);
+
+    camera.position.x = startPos.x + (endPos.x - startPos.x) * ease;
+    camera.position.y = startPos.y + (endPos.y - startPos.y) * ease;
+    camera.position.z = startPos.z + (endPos.z - startPos.z) * ease;
+
+    if (t >= 1) {
+      controls.enabled = true;
+      introAnimDone = true;
+      return true; // done
+    }
+    return false;
+  }
+
+  // Store intro updater
+  window._introTick = introTick;
+}
+
+// ============================================================
+// INTERACTION
+// ============================================================
+function onPointerDown(event) {
+  if (!introAnimDone || isFortuneActive) return;
+
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(clickableObjects, true);
+
+  if (intersects.length > 0) {
+    const hit = intersects[0].object;
+
+    // Check if it's the crystal ball (or a parent/child of it)
+    if (isCrystalBall(hit)) {
+      triggerCrystalBallFortune();
+    } else if (isTarotCard(hit)) {
+      triggerTarotReading(hit);
+    }
+  }
+}
+
+function isCrystalBall(obj) {
+  if (obj === crystalBallObj) return true;
+  let current = obj;
+  while (current.parent) {
+    if (current.parent === crystalBallObj) return true;
+    current = current.parent;
+  }
+  return false;
+}
+
+function isTarotCard(obj) {
+  for (const card of tarotObjs) {
+    if (obj === card) return true;
+    let current = obj;
+    while (current.parent) {
+      if (current.parent === card) return true;
+      current = current.parent;
+    }
+  }
+  return tarotObjs.includes(obj);
+}
+
+// ============================================================
+// CRYSTAL BALL FORTUNE
+// ============================================================
+let crystalAnimating = false;
+function triggerCrystalBallFortune() {
+  if (crystalAnimating) return;
+  isFortuneActive = true;
+  crystalAnimating = true;
+
+  // Animate crystal ball: glow up and spin
+  const startTime = clock.getElapsedTime();
+  const animDuration = 2.0;
+
+  function animateCrystal() {
+    const elapsed = clock.getElapsedTime() - startTime;
+    const t = Math.min(elapsed / animDuration, 1);
+
+    if (crystalBallObj) {
+      // Spin
+      crystalBallObj.rotation.y += 0.08 * (1 - t);
+      // Glow
+      crystalBallObj.material.emissiveIntensity = 0.3 + Math.sin(t * Math.PI) * 2;
+      crystalGlowLight.intensity = 0.8 + Math.sin(t * Math.PI) * 3;
+    }
+
+    if (t < 1) {
+      requestAnimationFrame(animateCrystal);
+    } else {
+      // Reset glow
+      if (crystalBallObj) {
+        crystalBallObj.material.emissiveIntensity = 0.3;
+      }
+      crystalGlowLight.intensity = 0.8;
+      crystalAnimating = false;
+
+      // Show shimmer
+      shimmerEl.classList.add('active');
+      setTimeout(() => shimmerEl.classList.remove('active'), 900);
+
+      // Show fortune
+      showFortune();
+    }
+  }
+  animateCrystal();
+}
+
+function showFortune() {
+  const pool = fortunes[selectedCategory];
+  const fortune = pool[Math.floor(Math.random() * pool.length)];
+
+  document.getElementById('f-category').textContent = selectedCategory;
+
+  const starCount = { "大吉": 5, "吉": 4, "中吉": 3, "小吉": 2, "凶": 1 };
+  const stars = "★".repeat(starCount[fortune.level] || 3) + "☆".repeat(5 - (starCount[fortune.level] || 3));
+  document.getElementById('f-stars').textContent = stars;
+
+  const luckEl = document.getElementById('f-luck');
+  luckEl.textContent = fortune.level;
+  luckEl.className = 'luck-level' + (fortune.level === '凶' ? ' bad' : '');
+
+  document.getElementById('f-message').textContent = fortune.msg;
+
+  fortuneOverlay.classList.add('visible');
+}
+
+// ============================================================
+// TAROT READING
+// ============================================================
+function triggerTarotReading(cardObj) {
+  isFortuneActive = true;
+
+  // Flip animation
+  const startTime = clock.getElapsedTime();
+  const animDuration = 1.0;
+  const startRotX = cardObj.rotation.x;
+
+  function animateFlip() {
+    const elapsed = clock.getElapsedTime() - startTime;
+    const t = Math.min(elapsed / animDuration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);
+
+    cardObj.rotation.x = startRotX + Math.PI * ease;
+
+    if (t < 1) {
+      requestAnimationFrame(animateFlip);
+    } else {
+      cardObj.rotation.x = startRotX + Math.PI;
+
+      // Shimmer
+      shimmerEl.classList.add('active');
+      setTimeout(() => shimmerEl.classList.remove('active'), 900);
+
+      // Show tarot reading
+      const tarot = tarotCards[Math.floor(Math.random() * tarotCards.length)];
+      document.getElementById('t-name').textContent = tarot.name;
+      document.getElementById('t-meaning').textContent = tarot.meaning;
+      tarotOverlay.classList.add('visible');
+
+      // Reset card rotation after a delay
+      setTimeout(() => {
+        cardObj.rotation.x = startRotX;
+      }, 1500);
+    }
+  }
+  animateFlip();
+}
+
+// ============================================================
+// ANIMATE
+// ============================================================
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+  const elapsed = clock.getElapsedTime();
+
+  // Intro animation
+  if (window._introTick && !introAnimDone) {
+    window._introTick(dt);
+  }
+
+  // Controls
+  controls.update();
+
+  // Candle flicker
+  candleLights.forEach(({ light, baseIntensity, offset }) => {
+    const flicker = Math.sin(elapsed * 8 + offset) * 0.15
+      + Math.sin(elapsed * 13 + offset * 2) * 0.1
+      + Math.sin(elapsed * 21 + offset * 3) * 0.05;
+    light.intensity = baseIntensity + flicker;
+    // Slight color shift
+    const warm = 0.5 + flicker;
+    light.color.setRGB(1, 0.6 + warm * 0.1, 0.25 + warm * 0.05);
+  });
+
+  // Crystal ball pulse
+  if (crystalBallObj && !crystalAnimating) {
+    const pulse = Math.sin(elapsed * 1.5) * 0.15 + 0.3;
+    crystalBallObj.material.emissiveIntensity = pulse;
+    crystalGlowLight.intensity = 0.5 + Math.sin(elapsed * 2) * 0.3;
+  }
+
+  // Incense particles
+  updateIncenseParticles(dt);
+
+  // Mixer for GLB animations
+  if (mixer) mixer.update(dt);
+
+  renderer.render(scene, camera);
+}
+
+// ============================================================
+// RESIZE
+// ============================================================
+function onResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// ============================================================
+// START
+// ============================================================
+init();
+</script>
+</body>
+</html>
